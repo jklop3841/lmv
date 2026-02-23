@@ -1,32 +1,74 @@
-test-windows:
-  runs-on: windows-latest
-  timeout-minutes: 20
-  env:
-    LMV_PASSPHRASE: "ci-test-passphrase"
-    LMV_WRITE_TOKEN: ""
-  steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+name: lmv-ci
 
-    - name: Setup Node
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
-        cache: npm
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
-    - name: Install
-      run: npm ci
+jobs:
+  test-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      LMV_PASSPHRASE: "ci-test-passphrase"
+      LMV_WRITE_TOKEN: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Build
-      run: npm run build
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "package-lock.json"
 
-    - name: Integration Tests (capture log)
-      shell: pwsh
-      run: |
-        npm run test:integration *>&1 | Tee-Object integration.log
+      - name: Install
+        run: npm ci
 
-    - name: Upload integration log
-      uses: actions/upload-artifact@v4
-      with:
-        name: integration-log-windows
-        path: integration.log
+      - name: Build
+        run: npm run build
+
+      - name: Integration Tests (capture log)
+        shell: pwsh
+        run: npm run test:integration 2>&1 | Tee-Object -FilePath integration.log
+
+      - name: Upload integration log
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-log-windows
+          path: integration.log
+
+  test-ubuntu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LMV_PASSPHRASE: "ci-test-passphrase"
+      LMV_WRITE_TOKEN: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "package-lock.json"
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Integration Tests (capture log)
+        run: npm run test:integration 2>&1 | tee integration.log
+
+      - name: Upload integration log
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-log-ubuntu
+          path: integration.log
