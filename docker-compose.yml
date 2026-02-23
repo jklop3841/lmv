@@ -1,0 +1,16 @@
+services:
+  lmv:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lmv
+    environment:
+      LMV_PASSPHRASE: ${LMV_PASSPHRASE:?LMV_PASSPHRASE must be set}
+      LMV_WRITE_TOKEN: ${LMV_WRITE_TOKEN:-}
+      PORT: 8787
+      DATA_DIR: /app/data
+    ports:
+      - "127.0.0.1:${LMV_PORT:-8787}:8787"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

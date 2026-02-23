@@ -1,0 +1,30 @@
+{
+  "name": "lmv",
+  "version": "1.0.0",
+  "description": "Local Memory Vault v1",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/index.js",
+    "dev": "tsx src/index.ts",
+    "init-seed": "tsx scripts/init_seed.ts",
+    "verify-ledger": "tsx scripts/verify_ledger.ts",
+    "reencrypt": "tsx scripts/reencrypt.ts",
+    "example-agent": "tsx examples/agent_client.ts",
+    "test:integration": "npm run build && node --test dist/tests/*.test.js"
+  },
+  "dependencies": {
+    "fast-json-patch": "^3.1.1",
+    "fastify": "^4.28.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.8",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

@@ -1,0 +1,14 @@
+﻿# release asset verification run - 2026-02-23T21:44:40.4860172+08:00
+
+## environment checks
+git --version:
+git version 2.52.0.windows.1
+gh --version:
+gh: not found
+
+## workflow wait
+skipped: GitHub CLI unavailable
+## download release assets
+skipped: GitHub CLI unavailable
+## sha256 verify
+skipped: no downloaded assets
