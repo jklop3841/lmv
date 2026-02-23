@@ -5,15 +5,18 @@ on:
     branches: ["main", "master"]
   pull_request:
     branches: ["main", "master"]
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 jobs:
+
   test-windows:
     runs-on: windows-latest
     timeout-minutes: 20
+
     env:
-      LMV_PASSPHRASE: "ci-test-passphrase"
+      LMV_PASSPHRASE: ci-test-passphrase
       LMV_WRITE_TOKEN: ""
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,8 +24,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: 20
+          cache: npm
           cache-dependency-path: lmv/package-lock.json
 
       - name: Install
@@ -33,9 +36,10 @@ jobs:
         run: npm run build
         working-directory: lmv
 
-      - name: Integration Tests (capture log)
+      - name: Integration Tests
         shell: pwsh
-        run: npm run test:integration 2>&1 | Tee-Object -FilePath integration.log
+        run: |
+          npm run test:integration 2>&1 | Tee-Object -FilePath integration.log
         working-directory: lmv
 
       - name: Upload integration log
@@ -44,12 +48,16 @@ jobs:
           name: integration-log-windows
           path: lmv/integration.log
 
+
+
   test-ubuntu:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
     env:
-      LMV_PASSPHRASE: "ci-test-passphrase"
+      LMV_PASSPHRASE: ci-test-passphrase
       LMV_WRITE_TOKEN: ""
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -57,8 +65,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: 20
+          cache: npm
           cache-dependency-path: lmv/package-lock.json
 
       - name: Install
@@ -69,7 +77,7 @@ jobs:
         run: npm run build
         working-directory: lmv
 
-      - name: Integration Tests (capture log)
+      - name: Integration Tests
         run: |
           npm run test:integration 2>&1 | tee integration.log
         working-directory: lmv
