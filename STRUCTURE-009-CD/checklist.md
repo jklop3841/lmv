@@ -1,0 +1,5 @@
+- [ ] CI: npm test ok (Windows+Ubuntu)
+- [ ] tag push triggers release workflow
+- [ ] dry-run publish ok
+- [ ] secrets: NPM_TOKEN configured
+- [ ] switch to real publish

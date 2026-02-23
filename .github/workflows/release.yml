@@ -4,280 +4,49 @@ on:
   push:
     tags:
       - "v*.*.*"
-  workflow_dispatch: {}
+
+permissions:
+  contents: read
 
 jobs:
-  build-test-package:
-    strategy:
-      matrix:
-        include:
-          - os: windows-latest
-            platform: win-x64
-          - os: ubuntu-latest
-            platform: linux-x64
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
-    env:
-      LMV_PASSPHRASE: "ci-test-passphrase"
-      LMV_WRITE_TOKEN: ""
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node (npm publish)
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          registry-url: "https://registry.npmjs.org"
           cache: "npm"
-          cache-dependency-path: lmv/package-lock.json
 
       - name: Install
         run: npm ci
-        working-directory: lmv
+
+      - name: Test
+        run: npm test
 
       - name: Build
         run: npm run build
-        working-directory: lmv
 
-      - name: Integration Tests
-        run: npm run test:integration
-        working-directory: lmv
+      - name: Verify version
+        run: node scripts/assert-version.mjs
 
-      - name: Generate SBOM + npm audit evidence (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: Verify dist exists
         run: |
-          $tag = "${{ github.ref_name }}"
-          New-Item -ItemType Directory -Force -Path "lmv/release_meta" | Out-Null
-          npm --prefix lmv sbom --sbom-format=cyclonedx > "lmv/release_meta/lmv-${tag}-${{ matrix.platform }}-sbom.cdx.json"
-          (npm --prefix lmv audit --omit=dev 2>&1 | Out-String) | Set-Content "lmv/release_meta/lmv-${tag}-${{ matrix.platform }}-npm-audit.txt"
-          (npm --prefix lmv audit --omit=dev --json 2>&1 | Out-String) | Set-Content "lmv/release_meta/lmv-${tag}-${{ matrix.platform }}-npm-audit.json"
-
-      - name: Generate SBOM + npm audit evidence (Linux)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
-          mkdir -p lmv/release_meta
-          npm --prefix lmv sbom --sbom-format=cyclonedx > "lmv/release_meta/lmv-${TAG}-${{ matrix.platform }}-sbom.cdx.json"
-          (npm --prefix lmv audit --omit=dev || true) > "lmv/release_meta/lmv-${TAG}-${{ matrix.platform }}-npm-audit.txt"
-          (npm --prefix lmv audit --omit=dev --json || true) > "lmv/release_meta/lmv-${TAG}-${{ matrix.platform }}-npm-audit.json"
-
-      - name: Prepare package folder (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $tag = "${{ github.ref_name }}"
-          $pkg = "lmv-$tag"
-          $root = "out/$pkg"
-          New-Item -ItemType Directory -Force -Path $root | Out-Null
-
-          Copy-Item "lmv/README.md" "$root/README.md"
-          Copy-Item "lmv/CHANGELOG.md" "$root/CHANGELOG.md"
-          Copy-Item "lmv/package.json" "$root/package.json"
-          Copy-Item "lmv/package-lock.json" "$root/package-lock.json"
-          Copy-Item "lmv/tsconfig.json" "$root/tsconfig.json"
-          Copy-Item "lmv/Dockerfile" "$root/Dockerfile"
-          Copy-Item "lmv/docker-compose.yml" "$root/docker-compose.yml"
-          Copy-Item "lmv/src" "$root/src" -Recurse
-          Copy-Item "lmv/dist" "$root/dist" -Recurse
-          Copy-Item "lmv/scripts" "$root/scripts" -Recurse
-          Copy-Item "lmv/examples" "$root/examples" -Recurse
-          Copy-Item "lmv/docs" "$root/docs" -Recurse
-          Copy-Item "lmv/packages" "$root/packages" -Recurse
-          @'
-          # LMV Delivery
-          - This package does NOT include any data/ vault.
-          - Set LMV_PASSPHRASE before running.
-          - See README.md for quickstart and ACCEPTANCE_EVIDENCE_TEMPLATE.md for validation.
-          '@ | Set-Content "$root/DELIVERY.md"
-
-      - name: Prepare package folder (Linux)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
-          PKG="lmv-${TAG}"
-          mkdir -p "out/${PKG}"
-          cp lmv/README.md "out/${PKG}/README.md"
-          cp lmv/CHANGELOG.md "out/${PKG}/CHANGELOG.md"
-          cp lmv/package.json "out/${PKG}/package.json"
-          cp lmv/package-lock.json "out/${PKG}/package-lock.json"
-          cp lmv/tsconfig.json "out/${PKG}/tsconfig.json"
-          cp lmv/Dockerfile "out/${PKG}/Dockerfile"
-          cp lmv/docker-compose.yml "out/${PKG}/docker-compose.yml"
-          cp -R lmv/src "out/${PKG}/src"
-          cp -R lmv/dist "out/${PKG}/dist"
-          cp -R lmv/scripts "out/${PKG}/scripts"
-          cp -R lmv/examples "out/${PKG}/examples"
-          cp -R lmv/docs "out/${PKG}/docs"
-          cp -R lmv/packages "out/${PKG}/packages"
-          cat > "out/${PKG}/DELIVERY.md" << 'EOF'
-          # LMV Delivery
-          - This package does NOT include any data/ vault.
-          - Set LMV_PASSPHRASE before running.
-          - See README.md for quickstart and ACCEPTANCE_EVIDENCE_TEMPLATE.md for validation.
-          EOF
-
-      - name: Create zip (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $tag = "${{ github.ref_name }}"
-          $pkg = "lmv-$tag"
-          $zip = "lmv-$tag-${{ matrix.platform }}.zip"
-          Compress-Archive -Path "out/$pkg" -DestinationPath $zip -Force
-
-      - name: Create zip (Linux)
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
-          PKG="lmv-${TAG}"
-          zip -r "lmv-${TAG}-${{ matrix.platform }}.zip" "out/${PKG}"
-
-      - name: Upload zip artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: lmv-zip-${{ matrix.platform }}
-          path: lmv-${{ github.ref_name }}-${{ matrix.platform }}.zip
-          if-no-files-found: error
-
-      - name: Upload release meta artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: lmv-release-meta-${{ matrix.platform }}
-          path: |
-            lmv/release_meta/lmv-${{ github.ref_name }}-${{ matrix.platform }}-sbom.cdx.json
-            lmv/release_meta/lmv-${{ github.ref_name }}-${{ matrix.platform }}-npm-audit.txt
-            lmv/release_meta/lmv-${{ github.ref_name }}-${{ matrix.platform }}-npm-audit.json
-          if-no-files-found: error
-
-  release:
-    needs: [build-test-package]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: write
-    env:
-      LMV_AUDIT_GATE_LEVEL: off
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download all zip artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release_artifacts
-
-      - name: Flatten artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p release_out
-          find release_artifacts -name "*.zip" -exec cp {} release_out/ \;
-          find release_artifacts -name "*-sbom.cdx.json" -exec cp {} release_out/ \;
-          find release_artifacts -name "*-npm-audit.txt" -exec cp {} release_out/ \;
-          find release_artifacts -name "*-npm-audit.json" -exec cp {} release_out/ \;
-          if [ -f "release_out/lmv-${GITHUB_REF_NAME}-linux-x64-sbom.cdx.json" ]; then
-            cp "release_out/lmv-${GITHUB_REF_NAME}-linux-x64-sbom.cdx.json" "release_out/lmv-${GITHUB_REF_NAME}-sbom.cdx.json"
-            cp "release_out/lmv-${GITHUB_REF_NAME}-linux-x64-npm-audit.txt" "release_out/lmv-${GITHUB_REF_NAME}-npm-audit.txt"
-            cp "release_out/lmv-${GITHUB_REF_NAME}-linux-x64-npm-audit.json" "release_out/lmv-${GITHUB_REF_NAME}-npm-audit.json"
-          else
-            cp "$(ls release_out/lmv-${GITHUB_REF_NAME}-*-sbom.cdx.json | head -n1)" "release_out/lmv-${GITHUB_REF_NAME}-sbom.cdx.json"
-            cp "$(ls release_out/lmv-${GITHUB_REF_NAME}-*-npm-audit.txt | head -n1)" "release_out/lmv-${GITHUB_REF_NAME}-npm-audit.txt"
-            cp "$(ls release_out/lmv-${GITHUB_REF_NAME}-*-npm-audit.json | head -n1)" "release_out/lmv-${GITHUB_REF_NAME}-npm-audit.json"
+          if [ ! -d dist ]; then
+            echo "dist missing"
+            exit 1
           fi
-          ls -la release_out
 
-      - name: Optional audit severity gate
-        shell: bash
-        run: |
-          set -euo pipefail
-          LEVEL="${LMV_AUDIT_GATE_LEVEL:-off}"
-          if [ "$LEVEL" = "off" ]; then
-            echo "Audit gate disabled (LMV_AUDIT_GATE_LEVEL=off)."
-            exit 0
-          fi
-          python - "$LEVEL" "release_out/lmv-${GITHUB_REF_NAME}-npm-audit.json" << 'PY'
-          import json
-          import sys
-          level = sys.argv[1].lower()
-          path = sys.argv[2]
-          order = ["low", "moderate", "high", "critical"]
-          if level not in order:
-              raise SystemExit(f"Invalid LMV_AUDIT_GATE_LEVEL: {level}")
-          threshold_idx = order.index(level)
-          with open(path, "r", encoding="utf-8") as f:
-              data = json.load(f)
-          counts = data.get("metadata", {}).get("vulnerabilities", {})
-          triggered = []
-          for sev in order[threshold_idx:]:
-              if int(counts.get(sev, 0)) > 0:
-                  triggered.append(f"{sev}={counts.get(sev, 0)}")
-          if triggered:
-              raise SystemExit(
-                  "Audit gate failed at level "
-                  + level
-                  + " due to: "
-                  + ", ".join(triggered)
-              )
-          print(f"Audit gate passed at level {level}. counts={counts}")
-          PY
+      - name: Publish (dry-run)
+        run: npm publish --dry-run
 
-      - name: Compute sha256
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd release_out
-          sha256sum *.zip > "lmv-${GITHUB_REF_NAME}-sha256.txt"
-          cat "lmv-${GITHUB_REF_NAME}-sha256.txt"
-
-      - name: Extract release notes from CHANGELOG
-        id: notes
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="${GITHUB_REF_NAME#v}"
-          python - "$TAG" << 'PY'
-          import sys
-          from pathlib import Path
-          tag = sys.argv[1]
-          changelog = Path("lmv/CHANGELOG.md").read_text(encoding="utf-8")
-          lines = changelog.splitlines()
-          header = f"## [{tag}]"
-          out = []
-          capture = False
-          for line in lines:
-            if line.startswith("## ["):
-              if capture:
-                break
-              if line.startswith(header):
-                capture = True
-            if capture:
-              out.append(line)
-          Path("release_notes.txt").write_text(
-              "\n".join(out).strip() if out else f"Release v{tag}",
-              encoding="utf-8",
-          )
-          PY
-          {
-            echo "notes<<EOF"
-            cat release_notes.txt
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: ${{ github.ref_name }}
-          body: ${{ steps.notes.outputs.notes }}
-          files: |
-            release_out/*.zip
-            release_out/*-sha256.txt
-            release_out/*-sbom.cdx.json
-            release_out/*-npm-audit.txt
-            release_out/*-npm-audit.json
+      # - name: Publish
+      #   run: npm publish
+      #   env:
+      #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
